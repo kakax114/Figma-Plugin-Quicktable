@@ -9,6 +9,8 @@
     "removeComments": true,
     "noImplicitAny": false,
     "moduleResolution": "node",
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
     "typeRoots": [
       "./node_modules/@types",
       "./node_modules/@figma"

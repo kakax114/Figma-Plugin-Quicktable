@@ -88,8 +88,9 @@ figma.ui.onmessage = (msg) => {
 const allSelect = () => {
     const selection = [];
     const mainFrame = figma.currentPage.findAll((node) => node.name === 'QT-' + id);
-    mainFrame[0].children.forEach((node) => {
-        node.children.forEach((child) => {
+    const mainFrameNode = mainFrame[0] as FrameNode;
+    mainFrameNode.children.forEach((node) => {
+        (node as FrameNode).children.forEach((child) => {
             if ((child.name = 'Cell')) {
                 selection.push(child);
             }
@@ -170,7 +171,7 @@ const getRowFirst = (arr) => {
     Promise.all(arr).then((nodes) => {
         frame.layoutMode = 'VERTICAL';
         nodes.forEach((node) => {
-            frame.appendChild(node);
+            frame.appendChild(node as SceneNode);
         });
         frame.counterAxisSizingMode = 'AUTO';
     });
@@ -181,7 +182,7 @@ const removeTempValueOnEmptyTextCell = () => {
     //use as callback so the search findAll will work.
     const nodes = figma.currentPage.findAll((node) => node.name === '--table0--');
     nodes.forEach((node) => {
-        node.characters = ' ';
+        (node as TextNode).characters = ' ';
         node.name = 'Text';
     });
 };
@@ -190,7 +191,7 @@ const getText = async (i) => {
     const cell = figma.createFrame();
     cell.name = 'Cell';
     const text = figma.createText();
-    await figma.loadFontAsync(text.fontName);
+    await figma.loadFontAsync(text.fontName as FontName);
     text.characters = i.toString();
     if (text.characters === '') {
         text.characters = '-';
@@ -239,7 +240,7 @@ const getColFirst = (arr) => {
     Promise.all(arr).then((nodes) => {
         frame.layoutMode = 'HORIZONTAL';
         nodes.forEach((node) => {
-            frame.appendChild(node);
+            frame.appendChild(node as SceneNode);
         });
         frame.counterAxisSizingMode = 'AUTO';
     });

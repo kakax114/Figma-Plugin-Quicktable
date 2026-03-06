@@ -268,3 +268,54 @@ svg {
     background-color: white;
     border-radius: 51%;
 }
+
+.drop-zone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 20px 0;
+    border: 1.5px dashed var(--mute-grey);
+    border-radius: var(--radius);
+    cursor: pointer;
+    gap: 4px;
+    transition: border-color 0.15s, background-color 0.15s;
+}
+
+.drop-zone:hover {
+    border-color: var(--accent-grey);
+}
+
+.drop-zone--active {
+    border-color: var(--primary-blue);
+    background-color: rgba(29, 94, 255, 0.08);
+}
+
+.drop-zone__sub {
+    font-size: 11px;
+}
+
+.drop-zone__filename {
+    color: var(--primary-blue);
+}
+
+.text-paste {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 8px;
+}
+
+.text-paste__toggle {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    text-align: left;
+    font-size: 11px;
+}
+
+.text-paste__toggle:hover {
+    color: var(--accent-grey);
+}
