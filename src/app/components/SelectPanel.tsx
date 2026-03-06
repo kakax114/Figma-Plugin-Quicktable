@@ -1,15 +1,27 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 import Toggle from './Toggle';
 
 interface Props {
+    activeTableId: string | null;
     returnArray: any[];
 }
 
-export default function SelectPanel({returnArray}: Props) {
+export default function SelectPanel({activeTableId, returnArray}: Props) {
     const [command, setCommand] = useState('');
     const [direction, setDirection] = useState(0);
     const [textMode, setTextMode] = useState(false);
     const [invertSelect, setInvertSelect] = useState(false);
+
+    useEffect(() => {
+        const handler = (event: MessageEvent) => {
+            const msg = event.data?.pluginMessage;
+            if (msg?.type === 'direction-wrapped') {
+                setDirection(msg.direction);
+            }
+        };
+        window.addEventListener('message', handler);
+        return () => window.removeEventListener('message', handler);
+    }, []);
 
     const handleCommand = (input: string, move: number, selectText: boolean, isInverted: boolean) => {
         setCommand(input);
@@ -24,11 +36,21 @@ export default function SelectPanel({returnArray}: Props) {
                     direction: move,
                     textMode: selectText,
                     invertSelect: isInverted,
+                    activeTableId,
                 },
             },
             '*'
         );
     };
+
+    const showTextModeToggle =
+        command === 'all' ||
+        command === 'topHeader' ||
+        command === 'sideHeader' ||
+        command === 'oddRows' ||
+        command === 'evenRows' ||
+        command === 'oddCols' ||
+        command === 'evenCols';
 
     return (
         <div>
@@ -36,7 +58,7 @@ export default function SelectPanel({returnArray}: Props) {
                 <div className="sectionTitle">
                     <p className="label secTitle">Select</p>
                 </div>
-                {(command === 'all' || command === 'topHeader' || command === 'sideHeader') && (
+                {showTextModeToggle && (
                     <div className="wraper">
                         <p className={textMode ? 'label' : 'label label-inactive'}>Text mode</p>
                         <Toggle
@@ -88,6 +110,27 @@ export default function SelectPanel({returnArray}: Props) {
                                 </svg>
                             </div>
                             <p className="label">Top header</p>
+                            {command === 'topHeader' && (
+                                <div className="option-nav" onClick={(e) => e.stopPropagation()}>
+                                    <button
+                                        className="option-nav__btn"
+                                        onClick={() =>
+                                            handleCommand('topHeader', direction - 1, textMode, invertSelect)
+                                        }
+                                    >
+                                        ‹
+                                    </button>
+                                    <span className="option-nav__label">Row {direction + 1}</span>
+                                    <button
+                                        className="option-nav__btn"
+                                        onClick={() =>
+                                            handleCommand('topHeader', direction + 1, textMode, invertSelect)
+                                        }
+                                    >
+                                        ›
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
                         <div
@@ -106,85 +149,111 @@ export default function SelectPanel({returnArray}: Props) {
                                 </svg>
                             </div>
                             <p className="label">Side header</p>
+                            {command === 'sideHeader' && (
+                                <div className="option-nav" onClick={(e) => e.stopPropagation()}>
+                                    <button
+                                        className="option-nav__btn"
+                                        onClick={() =>
+                                            handleCommand('sideHeader', direction - 1, textMode, invertSelect)
+                                        }
+                                    >
+                                        ‹
+                                    </button>
+                                    <span className="option-nav__label">Col {direction + 1}</span>
+                                    <button
+                                        className="option-nav__btn"
+                                        onClick={() =>
+                                            handleCommand('sideHeader', direction + 1, textMode, invertSelect)
+                                        }
+                                    >
+                                        ›
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        <div
+                            className={command === 'oddRows' ? 'option' : 'option option-inactive'}
+                            onClick={() => handleCommand('oddRows', 0, textMode, false)}
+                        >
+                            <div className="icon">
+                                <svg
+                                    width="20"
+                                    height="20"
+                                    viewBox="0 0 20 20"
+                                    fill="none"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                >
+                                    <rect x="0" y="0" width="20" height="4" rx="1" fill="currentColor" />
+                                    <rect x="0" y="8" width="20" height="4" rx="1" fill="currentColor" opacity="0.3" />
+                                    <rect x="0" y="16" width="20" height="4" rx="1" fill="currentColor" />
+                                </svg>
+                            </div>
+                            <p className="label">Odd rows</p>
+                        </div>
+
+                        <div
+                            className={command === 'evenRows' ? 'option' : 'option option-inactive'}
+                            onClick={() => handleCommand('evenRows', 0, textMode, false)}
+                        >
+                            <div className="icon">
+                                <svg
+                                    width="20"
+                                    height="20"
+                                    viewBox="0 0 20 20"
+                                    fill="none"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                >
+                                    <rect x="0" y="0" width="20" height="4" rx="1" fill="currentColor" opacity="0.3" />
+                                    <rect x="0" y="8" width="20" height="4" rx="1" fill="currentColor" />
+                                    <rect x="0" y="16" width="20" height="4" rx="1" fill="currentColor" opacity="0.3" />
+                                </svg>
+                            </div>
+                            <p className="label">Even rows</p>
+                        </div>
+
+                        <div
+                            className={command === 'oddCols' ? 'option' : 'option option-inactive'}
+                            onClick={() => handleCommand('oddCols', 0, textMode, false)}
+                        >
+                            <div className="icon">
+                                <svg
+                                    width="20"
+                                    height="20"
+                                    viewBox="0 0 20 20"
+                                    fill="none"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                >
+                                    <rect x="0" y="0" width="4" height="20" rx="1" fill="currentColor" />
+                                    <rect x="8" y="0" width="4" height="20" rx="1" fill="currentColor" opacity="0.3" />
+                                    <rect x="16" y="0" width="4" height="20" rx="1" fill="currentColor" />
+                                </svg>
+                            </div>
+                            <p className="label">Odd columns</p>
+                        </div>
+
+                        <div
+                            className={command === 'evenCols' ? 'option' : 'option option-inactive'}
+                            onClick={() => handleCommand('evenCols', 0, textMode, false)}
+                        >
+                            <div className="icon">
+                                <svg
+                                    width="20"
+                                    height="20"
+                                    viewBox="0 0 20 20"
+                                    fill="none"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                >
+                                    <rect x="0" y="0" width="4" height="20" rx="1" fill="currentColor" opacity="0.3" />
+                                    <rect x="8" y="0" width="4" height="20" rx="1" fill="currentColor" />
+                                    <rect x="16" y="0" width="4" height="20" rx="1" fill="currentColor" opacity="0.3" />
+                                </svg>
+                            </div>
+                            <p className="label">Even columns</p>
                         </div>
                     </div>
                 </div>
             )}
-
-            <div className="container">
-                {command === 'topHeader' && (
-                    <div className="wraper">
-                        <div
-                            className="tab tab-inactive"
-                            onClick={() => handleCommand(command, direction - 1, textMode, invertSelect)}
-                        >
-                            <div className="icon">
-                                <svg
-                                    width="20"
-                                    height="20"
-                                    viewBox="0 0 20 20"
-                                    fill="none"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                >
-                                    <path d="M11.0094 0.420648L19.5794 8.89065C19.8594 9.16065 19.9994 9.53065 19.9994 9.88065C19.9994 10.2406 19.8594 10.6006 19.5794 10.8806C19.0294 11.4406 18.1094 11.4406 17.5594 10.8806L11.4294 4.82065L11.4294 18.5906C11.4294 19.3706 10.7894 20.0006 9.99939 20.0006C9.20939 20.0006 8.56939 19.3706 8.56939 18.5906L8.56939 4.82065L2.43939 10.8806C1.88939 11.4406 0.969389 11.4406 0.419389 10.8806C-0.140611 10.3206 -0.140611 9.44065 0.419389 8.88065L8.98939 0.410648C9.53939 -0.139352 10.4594 -0.139352 11.0094 0.420648Z" />
-                                </svg>
-                            </div>
-                        </div>
-                        <div
-                            className="tab tab-inactive"
-                            onClick={() => handleCommand(command, direction + 1, textMode, invertSelect)}
-                        >
-                            <div className="icon">
-                                <svg
-                                    width="20"
-                                    height="20"
-                                    viewBox="0 0 20 20"
-                                    fill="none"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                >
-                                    <path d="M8.99 19.5794L0.42 11.1094C0.14 10.8394 -4.16625e-07 10.4694 -4.31924e-07 10.1194C-4.4766e-07 9.75941 0.14 9.39941 0.42 9.11941C0.969999 8.55941 1.89 8.55941 2.44 9.11941L8.57 15.1794L8.57 1.40941C8.57 0.629412 9.21 -0.000587866 10 -0.0005879C10.79 -0.000587935 11.43 0.629412 11.43 1.40941L11.43 15.1794L17.56 9.11941C18.11 8.55941 19.03 8.55941 19.58 9.11941C20.14 9.67941 20.14 10.5594 19.58 11.1194L11.01 19.5894C10.46 20.1394 9.54 20.1394 8.99 19.5794Z" />
-                                </svg>
-                            </div>
-                        </div>
-                    </div>
-                )}
-                {command === 'sideHeader' && (
-                    <div className="wraper">
-                        <div
-                            className="tab tab-inactive"
-                            onClick={() => handleCommand(command, direction - 1, textMode, invertSelect)}
-                        >
-                            <div className="icon">
-                                <svg
-                                    width="20"
-                                    height="20"
-                                    viewBox="0 0 20 20"
-                                    fill="none"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                >
-                                    <path d="M0.420038 8.99L8.89004 0.42C9.16004 0.14 9.53004 0 9.88004 0C10.24 0 10.6 0.14 10.88 0.42C11.44 0.97 11.44 1.89 10.88 2.44L4.82004 8.57H18.59C19.37 8.57 20 9.21 20 10C20 10.79 19.37 11.43 18.59 11.43H4.82004L10.88 17.56C11.44 18.11 11.44 19.03 10.88 19.58C10.32 20.14 9.44004 20.14 8.88004 19.58L0.410038 11.01C-0.139962 10.46 -0.139962 9.54 0.420038 8.99Z" />
-                                </svg>
-                            </div>
-                        </div>
-                        <div
-                            className="tab tab-inactive"
-                            onClick={() => handleCommand(command, direction + 1, textMode, invertSelect)}
-                        >
-                            <div className="icon">
-                                <svg
-                                    width="20"
-                                    height="20"
-                                    viewBox="0 0 20 20"
-                                    fill="none"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                >
-                                    <path d="M19.58 11.01L11.11 19.58C10.84 19.86 10.47 20 10.11 20C9.75 20 9.39 19.86 9.11 19.58C8.55 19.03 8.55 18.11 9.11 17.56L15.17 11.43H1.41C0.63 11.43 0 10.79 0 10C0 9.21 0.63 8.57 1.41 8.57H15.18L9.12 2.44C8.56 1.89 8.56 0.97 9.12 0.42C9.68 -0.14 10.56 -0.14 11.12 0.42L19.59 8.99C20.14 9.54 20.14 10.46 19.58 11.01Z" />
-                                </svg>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div>
         </div>
     );
 }
