@@ -1,9 +1,9 @@
-figma.showUI(__html__, {width: 277, height: 475});
+figma.showUI(__html__, {width: 277, height: 460});
 
 //global variables
 var message = null;
 var command = '';
-var input = [
+var input: any[][] = [
     [1, 2],
     [3, 4],
     [5, 6],
@@ -11,139 +11,286 @@ var input = [
 ];
 var id = '';
 
+const scanQTFrames = () => {
+    const frames = figma.currentPage.findAll(
+        (node) => node.type === 'FRAME' && node.name.startsWith('QT-')
+    ) as FrameNode[];
+    figma.ui.postMessage({
+        type: 'qt-frames',
+        frames: frames.map((f) => ({id: f.id, name: f.name})),
+    });
+};
+
+// Scan on startup so UI can populate the picker immediately
+scanQTFrames();
+
 figma.ui.onmessage = (msg) => {
+    if (msg.type === 'scan-tables') {
+        scanQTFrames();
+    }
+
     if (msg.type === 'command') {
         command = msg.command;
-        console.log(command);
-        console.log(msg.textMode);
 
-        const selection = allSelect();
+        const frame = getFrameById(msg.activeTableId);
+        if (!frame) return;
+
+        const selection = allSelect(frame);
 
         if (command === 'all') {
             figma.currentPage.selection = selection;
             if (msg.textMode) {
                 figma.currentPage.selection = selectText(selection);
             }
-            // const temp = figma.currentPage.findAll((node) => node.name === '--table0--');
-            // temp.forEach((node) => {
-            //     node.characters = '';
-            // }
         }
         if (command === 'sideHeader') {
-            const nodes = colSelect(selection, input, msg.direction);
+            const count = getColCount(frame);
+            const wrapped = count > 0 ? ((msg.direction % count) + count) % count : 0;
+            const nodes = colSelect(frame, wrapped);
+            figma.currentPage.selection = nodes;
+            if (msg.textMode) {
+                figma.currentPage.selection = selectText(nodes);
+            }
+            figma.ui.postMessage({type: 'direction-wrapped', direction: wrapped});
+        }
+        if (command === 'topHeader') {
+            const count = getRowCount(frame);
+            const wrapped = count > 0 ? ((msg.direction % count) + count) % count : 0;
+            const nodes = rowSelect(frame, wrapped);
+            figma.currentPage.selection = nodes;
+            if (msg.textMode) {
+                figma.currentPage.selection = selectText(nodes);
+            }
+            figma.ui.postMessage({type: 'direction-wrapped', direction: wrapped});
+        }
+        if (command === 'oddRows') {
+            const nodes = strideRowSelect(frame, 0);
             figma.currentPage.selection = nodes;
             if (msg.textMode) {
                 figma.currentPage.selection = selectText(nodes);
             }
         }
-        if (command === 'topHeader') {
-            const nodes = rowSelect(selection, input, msg.direction);
+        if (command === 'evenRows') {
+            const nodes = strideRowSelect(frame, 1);
             figma.currentPage.selection = nodes;
-
-            // if (msg.invertSelect){
-            //     const selectionNotInNodes = selection.filter((node) => !nodes.includes(node));
-            //     figma.currentPage.selection = selectionNotInNodes;
-            // }
-
+            if (msg.textMode) {
+                figma.currentPage.selection = selectText(nodes);
+            }
+        }
+        if (command === 'oddCols') {
+            const nodes = strideColSelect(frame, 0);
+            figma.currentPage.selection = nodes;
+            if (msg.textMode) {
+                figma.currentPage.selection = selectText(nodes);
+            }
+        }
+        if (command === 'evenCols') {
+            const nodes = strideColSelect(frame, 1);
+            figma.currentPage.selection = nodes;
             if (msg.textMode) {
                 figma.currentPage.selection = selectText(nodes);
             }
         }
     }
-    if (msg.type === 'create-table') {
-        //listening on 'Create Table' button pressed
 
-        input = msg.items;
+    if (msg.type === 'create-table') {
+        // If items is empty (pick-existing toggle), extract data from the existing frame
+        if (!msg.items || msg.items.length === 0) {
+            if (msg.targetFrameId) {
+                const existingNode = figma.getNodeById(msg.targetFrameId);
+                if (existingNode && existingNode.type === 'FRAME') {
+                    const existingFrame = existingNode as FrameNode;
+                    const currentLayout = getLayoutState(existingFrame);
+                    const rawData = extractFrameData(existingFrame);
+                    const needsTranspose = currentLayout !== msg.state;
+                    input = needsTranspose ? transposeData(rawData) : rawData;
+                }
+            }
+        } else {
+            input = msg.items;
+        }
+
         id = randomId();
         message = msg;
         const arr = [];
 
+        // Remove existing frame first, remember its position for in-place replace
+        let replaceX: number | null = null;
+        let replaceY: number | null = null;
+        if (msg.targetFrameId) {
+            const existing = figma.getNodeById(msg.targetFrameId);
+            if (existing && existing.type === 'FRAME') {
+                replaceX = (existing as FrameNode).x;
+                replaceY = (existing as FrameNode).y;
+                existing.remove();
+            }
+        }
+
+        let mainFrame: FrameNode;
         if (message.state === 'tableByRow') {
-            //use callback to run remove value after creating table with temp value
-            autoByRow(
-                () => {
-                    removeTempValueOnEmptyTextCell();
-                },
-                input,
-                arr
-            );
-        } else if (message.state === 'tableByColumn') {
-            autoByCol(
-                () => {
-                    removeTempValueOnEmptyTextCell();
-                },
-                input,
-                arr
-            );
+            mainFrame = autoByRow(() => removeTempValueOnEmptyTextCell(), input, arr);
+        } else {
+            mainFrame = autoByCol(() => removeTempValueOnEmptyTextCell(), input, arr);
+        }
+
+        if (replaceX !== null) {
+            mainFrame.x = replaceX;
+            mainFrame.y = replaceY;
         }
 
         figma.ui.postMessage({
             type: 'create-table',
             message: arr,
+            newFrameId: mainFrame.id,
+            newFrameName: mainFrame.name,
         });
     }
 };
 
-//select all children of Mainframe and return them in an array
-const allSelect = () => {
-    const selection = [];
-    const mainFrame = figma.currentPage.findAll((node) => node.name === 'QT-' + id);
-    mainFrame[0].children.forEach((node) => {
-        node.children.forEach((child) => {
-            if ((child.name = 'Cell')) {
-                selection.push(child);
+// --- Frame lookup ---
+
+const getFrameById = (frameId: string): FrameNode | null => {
+    if (frameId) {
+        const node = figma.getNodeById(frameId);
+        if (node && node.type === 'FRAME') return node as FrameNode;
+    }
+    // fallback: find by generated id
+    const frames = figma.currentPage.findAll((node) => node.name === 'QT-' + id);
+    return (frames[0] as FrameNode) || null;
+};
+
+// Detect layout from frame structure:
+//   HORIZONTAL mainFrame = tableByColumn (children are column frames)
+//   VERTICAL   mainFrame = tableByRow    (children are row frames)
+const getLayoutState = (frame: FrameNode): 'tableByColumn' | 'tableByRow' => {
+    return frame.layoutMode === 'HORIZONTAL' ? 'tableByColumn' : 'tableByRow';
+};
+
+// Row and column count helpers
+const getRowCount = (frame: FrameNode): number => {
+    if (getLayoutState(frame) === 'tableByColumn') {
+        const firstCol = frame.children[0] as FrameNode;
+        return firstCol ? firstCol.children.filter((c) => c.name === 'Cell').length : 0;
+    }
+    return frame.children.length;
+};
+
+const getColCount = (frame: FrameNode): number => {
+    if (getLayoutState(frame) === 'tableByRow') {
+        const firstRow = frame.children[0] as FrameNode;
+        return firstRow ? firstRow.children.filter((c) => c.name === 'Cell').length : 0;
+    }
+    return frame.children.length;
+};
+
+// Extract cell text data from an existing frame in its natural layout format
+const extractFrameData = (frame: FrameNode): string[][] => {
+    const data: string[][] = [];
+    frame.children.forEach((child) => {
+        const childData: string[] = [];
+        (child as FrameNode).children.forEach((cell) => {
+            if (cell.name === 'Cell') {
+                const t = (cell as FrameNode).children.find((c) => c.type === 'TEXT') as TextNode | undefined;
+                childData.push(t ? t.characters : '');
             }
+        });
+        if (childData.length > 0) data.push(childData);
+    });
+    return data;
+};
+
+const transposeData = (arr: string[][]): string[][] => {
+    if (arr.length === 0 || arr[0].length === 0) return arr;
+    const result: string[][] = [];
+    for (let i = 0; i < arr[0].length; i++) {
+        const row: string[] = [];
+        for (let j = 0; j < arr.length; j++) row.push(arr[j][i] ?? '');
+        result.push(row);
+    }
+    return result;
+};
+
+// Collect all Cell nodes from the frame
+const allSelect = (frame: FrameNode): SceneNode[] => {
+    const selection: SceneNode[] = [];
+    frame.children.forEach((child) => {
+        (child as FrameNode).children.forEach((cell) => {
+            if (cell.name === 'Cell') selection.push(cell);
         });
     });
     return selection;
 };
 
-const selectText = (nodes) => {
-    const text = [];
+// Select a specific column (sideHeader)
+const colSelect = (frame: FrameNode, colIndex: number): SceneNode[] => {
+    const state = getLayoutState(frame);
+    const select: SceneNode[] = [];
+
+    if (state === 'tableByColumn') {
+        const colFrame = frame.children[colIndex] as FrameNode;
+        if (!colFrame) return [];
+        colFrame.children.forEach((cell) => {
+            if (cell.name === 'Cell') select.push(cell);
+        });
+    } else {
+        frame.children.forEach((rowFrame) => {
+            const cells = (rowFrame as FrameNode).children.filter((c) => c.name === 'Cell');
+            if (cells[colIndex]) select.push(cells[colIndex]);
+        });
+    }
+    return select;
+};
+
+// Select a specific row (topHeader)
+const rowSelect = (frame: FrameNode, rowIndex: number): SceneNode[] => {
+    const state = getLayoutState(frame);
+    const select: SceneNode[] = [];
+
+    if (state === 'tableByColumn') {
+        frame.children.forEach((colFrame) => {
+            const cells = (colFrame as FrameNode).children.filter((c) => c.name === 'Cell');
+            if (cells[rowIndex]) select.push(cells[rowIndex]);
+        });
+    } else {
+        const rowFrame = frame.children[rowIndex] as FrameNode;
+        if (!rowFrame) return [];
+        rowFrame.children.forEach((cell) => {
+            if (cell.name === 'Cell') select.push(cell);
+        });
+    }
+    return select;
+};
+
+// Select every other row. offset=0 → odd (1st,3rd,...), offset=1 → even (2nd,4th,...)
+const strideRowSelect = (frame: FrameNode, offset: number): SceneNode[] => {
+    const select: SceneNode[] = [];
+    const rowCount = getRowCount(frame);
+    for (let r = offset; r < rowCount; r += 2) {
+        select.push(...rowSelect(frame, r));
+    }
+    return select;
+};
+
+// Select every other column. offset=0 → odd (1st,3rd,...), offset=1 → even (2nd,4th,...)
+const strideColSelect = (frame: FrameNode, offset: number): SceneNode[] => {
+    const select: SceneNode[] = [];
+    const colCount = getColCount(frame);
+    for (let c = offset; c < colCount; c += 2) {
+        select.push(...colSelect(frame, c));
+    }
+    return select;
+};
+
+const selectText = (nodes: SceneNode[]): SceneNode[] => {
+    const text: SceneNode[] = [];
     nodes.forEach((node) => {
-        node.findChildren((child) => {
-            if (child.type === 'TEXT') {
-                text.push(child);
-            }
-        }, true);
+        const found = (node as FrameNode).findChildren((child) => child.type === 'TEXT');
+        text.push(...found);
     });
     return text;
 };
 
-const colSelect = (selection, input, number) => {
-    const select = [];
-    if (message.state === 'tableByColumn') {
-        const base = input[number].length;
-        for (let i = 0; i < base; i++) {
-            select.push(selection[number * base + i]);
-        }
-    } else if (message.state === 'tableByRow') {
-        const base = input.length;
-        for (let i = 0; i < base; i++) {
-            select.push(selection[number + i * input[number].length]);
-        }
-    }
-    return select;
-};
-
-const rowSelect = (selection, input, number) => {
-    console.log(selection);
-    const select = [];
-    if (message.state === 'tableByColumn') {
-        const base = input.length;
-        for (let i = 0; i < base; i++) {
-            select.push(selection[number + i * input[0].length]);
-        }
-    } else if (message.state === 'tableByRow') {
-        const base = input[number].length;
-        for (let i = 0; i < base; i++) {
-            select.push(selection[number * base + i]);
-        }
-    }
-    return select;
-};
-
-const autoByCol = (callback, input, arr) => {
+const autoByCol = (callback, input, arr): FrameNode => {
     const mainFrame = figma.createFrame();
     mainFrame.layoutMode = 'HORIZONTAL';
     mainFrame.counterAxisSizingMode = 'AUTO';
@@ -152,6 +299,7 @@ const autoByCol = (callback, input, arr) => {
     });
     mainFrame.name = 'QT-' + id;
     setTimeout(callback, 500);
+    return mainFrame;
 };
 
 const getCol = (input, col) => {
@@ -170,7 +318,7 @@ const getRowFirst = (arr) => {
     Promise.all(arr).then((nodes) => {
         frame.layoutMode = 'VERTICAL';
         nodes.forEach((node) => {
-            frame.appendChild(node);
+            frame.appendChild(node as SceneNode);
         });
         frame.counterAxisSizingMode = 'AUTO';
     });
@@ -178,10 +326,9 @@ const getRowFirst = (arr) => {
 };
 
 const removeTempValueOnEmptyTextCell = () => {
-    //use as callback so the search findAll will work.
     const nodes = figma.currentPage.findAll((node) => node.name === '--table0--');
     nodes.forEach((node) => {
-        node.characters = ' ';
+        (node as TextNode).characters = ' ';
         node.name = 'Text';
     });
 };
@@ -190,7 +337,7 @@ const getText = async (i) => {
     const cell = figma.createFrame();
     cell.name = 'Cell';
     const text = figma.createText();
-    await figma.loadFontAsync(text.fontName);
+    await figma.loadFontAsync(text.fontName as FontName);
     text.characters = i.toString();
     if (text.characters === '') {
         text.characters = '-';
@@ -199,18 +346,18 @@ const getText = async (i) => {
     cell.appendChild(text);
     cell.layoutMode = 'HORIZONTAL';
     if (message.state === 'tableByColumn') {
-        cell.primaryAxisSizingMode = 'FIXED'; //horizontal
-        cell.counterAxisSizingMode = 'AUTO'; //vertical
+        cell.primaryAxisSizingMode = 'FIXED';
+        cell.counterAxisSizingMode = 'AUTO';
         cell.layoutAlign = 'STRETCH';
     } else if (message.state === 'tableByRow') {
-        cell.primaryAxisSizingMode = 'FIXED'; //horizontal
+        cell.primaryAxisSizingMode = 'FIXED';
         cell.resizeWithoutConstraints(150, 30);
-        cell.counterAxisSizingMode = 'AUTO'; //veritcal
+        cell.counterAxisSizingMode = 'AUTO';
     }
     return cell;
 };
 
-const autoByRow = (callback, input, arr) => {
+const autoByRow = (callback, input, arr): FrameNode => {
     const mainFrame = figma.createFrame();
     mainFrame.layoutMode = 'VERTICAL';
     mainFrame.counterAxisSizingMode = 'AUTO';
@@ -219,9 +366,9 @@ const autoByRow = (callback, input, arr) => {
     });
     mainFrame.name = 'QT-' + id;
     setTimeout(callback, 500);
+    return mainFrame;
 };
 
-// return a list with frames
 const getRow = (input, row) => {
     for (let i = 0; i < input.length; i++) {
         const col = [];
@@ -233,22 +380,18 @@ const getRow = (input, row) => {
     return row;
 };
 
-// return a frame with some texts
 const getColFirst = (arr) => {
     const frame = figma.createFrame();
     Promise.all(arr).then((nodes) => {
         frame.layoutMode = 'HORIZONTAL';
         nodes.forEach((node) => {
-            frame.appendChild(node);
+            frame.appendChild(node as SceneNode);
         });
         frame.counterAxisSizingMode = 'AUTO';
     });
     return frame;
 };
 
-//function to generate a random id
 const randomId = () => {
     return Math.random().toString(36).substr(5, 5);
 };
-
-// figma.closePlugin();

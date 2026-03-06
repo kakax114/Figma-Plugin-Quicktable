@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "build:watch",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "build:watch"],
+      "port": 0
+    }
+  ]
+}
