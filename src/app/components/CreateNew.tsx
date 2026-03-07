@@ -13,13 +13,19 @@ interface Props {
 }
 
 export default function CreateNew({rawData, onData, radioState, onRadioChange, onBack, onCreateTable}: Props) {
-    const cols = rawData.length > 0 ? rawData[0]?.length ?? 0 : 0;
-
     return (
         <div>
             <div className="step-nav">
-                <button className="back-btn label label-inactive" onClick={onBack}>
-                    ← Back
+                <button className="back-btn" onClick={onBack} aria-label="Back">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path
+                            d="M10 12L6 8L10 4"
+                            stroke="currentColor"
+                            strokeWidth="1.75"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        />
+                    </svg>
                 </button>
                 <p className="label secTitle">Create new table</p>
             </div>
@@ -30,20 +36,6 @@ export default function CreateNew({rawData, onData, radioState, onRadioChange, o
 
             <div className="container">
                 <TextPasteInput onData={onData} />
-            </div>
-
-            {rawData.length > 0 && (
-                <div className="container">
-                    <p className="label label-inactive data-preview">
-                        {rawData.length} rows × {cols} columns detected
-                    </p>
-                </div>
-            )}
-
-            <div className="container">
-                <div className="sectionTitle">
-                    <p className="label secTitle">Layout</p>
-                </div>
             </div>
 
             <div className="container">

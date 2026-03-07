@@ -36,16 +36,18 @@ export default function ActiveTable({
     return (
         <div>
             <div className="step-nav">
-                <button className="back-btn label label-inactive" onClick={onBack}>
-                    ← Back
+                <button className="back-btn" onClick={onBack} aria-label="Back">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path
+                            d="M10 12L6 8L10 4"
+                            stroke="currentColor"
+                            strokeWidth="1.75"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        />
+                    </svg>
                 </button>
                 <p className="label active-table-name">{activeTableName}</p>
-            </div>
-
-            <div className="container">
-                <div className="sectionTitle">
-                    <p className="label secTitle">Layout</p>
-                </div>
             </div>
 
             <div className="container">
@@ -54,9 +56,7 @@ export default function ActiveTable({
 
             {pendingState && (
                 <div className="warning-banner">
-                    <p className="label label-inactive">
-                        Changing layout recreates the table — row/column frame styling will reset. Cell styling is kept.
-                    </p>
+                    <p className="label label-inactive">Changing the layout resets table styles.</p>
                     <div className="warning-actions">
                         <button className="warn-btn warn-btn--cancel" onClick={() => setPendingState(null)}>
                             Cancel

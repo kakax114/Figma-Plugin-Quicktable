@@ -29,6 +29,14 @@ figma.ui.onmessage = (msg) => {
         scanQTFrames();
     }
 
+    if (msg.type === 'focus-table') {
+        const node = figma.getNodeById(msg.frameId);
+        if (node && node.type === 'FRAME') {
+            figma.currentPage.selection = [node as FrameNode];
+            figma.viewport.scrollAndZoomIntoView([node as FrameNode]);
+        }
+    }
+
     if (msg.type === 'command') {
         command = msg.command;
 
@@ -126,24 +134,37 @@ figma.ui.onmessage = (msg) => {
             }
         }
 
-        let mainFrame: FrameNode;
         if (message.state === 'tableByRow') {
-            mainFrame = autoByRow(() => removeTempValueOnEmptyTextCell(), input, arr);
+            (async () => {
+                const mainFrame = await autoByRow(() => removeTempValueOnEmptyTextCell(), input);
+                if (replaceX !== null) {
+                    mainFrame.x = replaceX;
+                    mainFrame.y = replaceY;
+                }
+                figma.currentPage.selection = [mainFrame];
+                figma.viewport.scrollAndZoomIntoView([mainFrame]);
+                figma.ui.postMessage({
+                    type: 'create-table',
+                    message: [1],
+                    newFrameId: mainFrame.id,
+                    newFrameName: mainFrame.name,
+                });
+            })();
         } else {
-            mainFrame = autoByCol(() => removeTempValueOnEmptyTextCell(), input, arr);
+            const mainFrame = autoByCol(() => removeTempValueOnEmptyTextCell(), input, arr);
+            if (replaceX !== null) {
+                mainFrame.x = replaceX;
+                mainFrame.y = replaceY;
+            }
+            figma.currentPage.selection = [mainFrame];
+            figma.viewport.scrollAndZoomIntoView([mainFrame]);
+            figma.ui.postMessage({
+                type: 'create-table',
+                message: arr,
+                newFrameId: mainFrame.id,
+                newFrameName: mainFrame.name,
+            });
         }
-
-        if (replaceX !== null) {
-            mainFrame.x = replaceX;
-            mainFrame.y = replaceY;
-        }
-
-        figma.ui.postMessage({
-            type: 'create-table',
-            message: arr,
-            newFrameId: mainFrame.id,
-            newFrameName: mainFrame.name,
-        });
     }
 };
 
@@ -333,9 +354,15 @@ const removeTempValueOnEmptyTextCell = () => {
     });
 };
 
-const getText = async (i) => {
+const getText = async (i): Promise<FrameNode> => {
     const cell = figma.createFrame();
     cell.name = 'Cell';
+    cell.layoutMode = 'HORIZONTAL';
+    cell.paddingLeft = 8;
+    cell.paddingRight = 8;
+    cell.paddingTop = 4;
+    cell.paddingBottom = 4;
+
     const text = figma.createText();
     await figma.loadFontAsync(text.fontName as FontName);
     text.characters = i.toString();
@@ -344,52 +371,55 @@ const getText = async (i) => {
         text.name = '--table0--';
     }
     cell.appendChild(text);
-    cell.layoutMode = 'HORIZONTAL';
+
     if (message.state === 'tableByColumn') {
         cell.primaryAxisSizingMode = 'FIXED';
         cell.counterAxisSizingMode = 'AUTO';
         cell.layoutAlign = 'STRETCH';
-    } else if (message.state === 'tableByRow') {
-        cell.primaryAxisSizingMode = 'FIXED';
-        cell.resizeWithoutConstraints(150, 30);
+    } else {
+        // AUTO = hug content in this API version; natural width measurable before column equalization
+        cell.primaryAxisSizingMode = 'AUTO';
         cell.counterAxisSizingMode = 'AUTO';
     }
     return cell;
 };
 
-const autoByRow = (callback, input, arr): FrameNode => {
+const autoByRow = async (callback, input): Promise<FrameNode> => {
     const mainFrame = figma.createFrame();
     mainFrame.layoutMode = 'VERTICAL';
     mainFrame.counterAxisSizingMode = 'AUTO';
-    getRow(input, arr).forEach((row) => {
-        mainFrame.appendChild(row);
-    });
     mainFrame.name = 'QT-' + id;
+
+    // Pass 1: create all cells with HUG sizing so natural widths are measurable
+    const allCells: FrameNode[][] = [];
+    for (const rowData of input) {
+        allCells.push(await Promise.all(rowData.map(getText)));
+    }
+
+    // Per-column max width (floor at 80px)
+    const numCols = allCells[0]?.length ?? 0;
+    const colWidths = Array.from({length: numCols}, (_, j) =>
+        Math.max(80, ...allCells.map((row) => row[j]?.width ?? 0))
+    );
+
+    // Pass 2: fix cell widths and build row frames
+    for (const rowCells of allCells) {
+        const rowFrame = figma.createFrame();
+        rowFrame.layoutMode = 'HORIZONTAL';
+        rowFrame.counterAxisSizingMode = 'AUTO';
+        rowFrame.primaryAxisSizingMode = 'AUTO';
+
+        rowCells.forEach((cell, j) => {
+            cell.primaryAxisSizingMode = 'FIXED';
+            cell.resizeWithoutConstraints(colWidths[j], cell.height);
+            rowFrame.appendChild(cell);
+        });
+
+        mainFrame.appendChild(rowFrame);
+    }
+
     setTimeout(callback, 500);
     return mainFrame;
-};
-
-const getRow = (input, row) => {
-    for (let i = 0; i < input.length; i++) {
-        const col = [];
-        for (let j = 0; j < input[i].length; j++) {
-            col.push(getText(input[i][j]));
-        }
-        row.push(getColFirst(col));
-    }
-    return row;
-};
-
-const getColFirst = (arr) => {
-    const frame = figma.createFrame();
-    Promise.all(arr).then((nodes) => {
-        frame.layoutMode = 'HORIZONTAL';
-        nodes.forEach((node) => {
-            frame.appendChild(node as SceneNode);
-        });
-        frame.counterAxisSizingMode = 'AUTO';
-    });
-    return frame;
 };
 
 const randomId = () => {

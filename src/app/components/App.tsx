@@ -76,6 +76,7 @@ const App = () => {
         setActiveTableName(frameName);
         setReturnArray([1]); // mark active so SelectPanel shows options
         setAppStep('active');
+        parent.postMessage({pluginMessage: {type: 'focus-table', frameId}}, '*');
     };
 
     return (

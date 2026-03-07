@@ -54,11 +54,8 @@ export default function SelectPanel({activeTableId, returnArray}: Props) {
 
     return (
         <div>
-            <div className="container">
-                <div className="sectionTitle">
-                    <p className="label secTitle">Select</p>
-                </div>
-                {showTextModeToggle && (
+            {showTextModeToggle && (
+                <div className="container">
                     <div className="wraper">
                         <p className={textMode ? 'label' : 'label label-inactive'}>Text mode</p>
                         <Toggle
@@ -66,8 +63,8 @@ export default function SelectPanel({activeTableId, returnArray}: Props) {
                             onChange={() => handleCommand(command, direction, !textMode, invertSelect)}
                         />
                     </div>
-                )}
-            </div>
+                </div>
+            )}
 
             {returnArray.length === 0 ? (
                 <div className="container">
