@@ -24,13 +24,13 @@ const scanQTFrames = () => {
 // Scan on startup so UI can populate the picker immediately
 scanQTFrames();
 
-figma.ui.onmessage = (msg) => {
+figma.ui.onmessage = async (msg) => {
     if (msg.type === 'scan-tables') {
         scanQTFrames();
     }
 
     if (msg.type === 'focus-table') {
-        const node = figma.getNodeById(msg.frameId);
+        const node = await figma.getNodeByIdAsync(msg.frameId);
         if (node && node.type === 'FRAME') {
             figma.currentPage.selection = [node as FrameNode];
             figma.viewport.scrollAndZoomIntoView([node as FrameNode]);
@@ -40,7 +40,7 @@ figma.ui.onmessage = (msg) => {
     if (msg.type === 'command') {
         command = msg.command;
 
-        const frame = getFrameById(msg.activeTableId);
+        const frame = await getFrameById(msg.activeTableId);
         if (!frame) return;
 
         const selection = allSelect(frame);
@@ -105,7 +105,7 @@ figma.ui.onmessage = (msg) => {
         // If items is empty (pick-existing toggle), extract data from the existing frame
         if (!msg.items || msg.items.length === 0) {
             if (msg.targetFrameId) {
-                const existingNode = figma.getNodeById(msg.targetFrameId);
+                const existingNode = await figma.getNodeByIdAsync(msg.targetFrameId);
                 if (existingNode && existingNode.type === 'FRAME') {
                     const existingFrame = existingNode as FrameNode;
                     const currentLayout = getLayoutState(existingFrame);
@@ -126,7 +126,7 @@ figma.ui.onmessage = (msg) => {
         let replaceX: number | null = null;
         let replaceY: number | null = null;
         if (msg.targetFrameId) {
-            const existing = figma.getNodeById(msg.targetFrameId);
+            const existing = await figma.getNodeByIdAsync(msg.targetFrameId);
             if (existing && existing.type === 'FRAME') {
                 replaceX = (existing as FrameNode).x;
                 replaceY = (existing as FrameNode).y;
@@ -170,9 +170,9 @@ figma.ui.onmessage = (msg) => {
 
 // --- Frame lookup ---
 
-const getFrameById = (frameId: string): FrameNode | null => {
+const getFrameById = async (frameId: string): Promise<FrameNode | null> => {
     if (frameId) {
-        const node = figma.getNodeById(frameId);
+        const node = await figma.getNodeByIdAsync(frameId);
         if (node && node.type === 'FRAME') return node as FrameNode;
     }
     // fallback: find by generated id
