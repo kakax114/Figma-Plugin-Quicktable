@@ -24,118 +24,121 @@ const scanQTFrames = () => {
 // Scan on startup so UI can populate the picker immediately
 scanQTFrames();
 
-figma.ui.onmessage = async (msg) => {
+figma.ui.onmessage = (msg) => {
     if (msg.type === 'scan-tables') {
         scanQTFrames();
     }
 
     if (msg.type === 'focus-table') {
-        const node = await figma.getNodeByIdAsync(msg.frameId);
-        if (node && node.type === 'FRAME') {
-            figma.currentPage.selection = [node as FrameNode];
-            figma.viewport.scrollAndZoomIntoView([node as FrameNode]);
-        }
+        (async () => {
+            const node = await figma.getNodeByIdAsync(msg.frameId);
+            if (node && node.type === 'FRAME') {
+                figma.currentPage.selection = [node as FrameNode];
+                figma.viewport.scrollAndZoomIntoView([node as FrameNode]);
+            }
+        })();
     }
 
     if (msg.type === 'command') {
         command = msg.command;
+        (async () => {
+            const frame = await getFrameById(msg.activeTableId);
+            if (!frame) return;
 
-        const frame = await getFrameById(msg.activeTableId);
-        if (!frame) return;
+            const selection = allSelect(frame);
 
-        const selection = allSelect(frame);
-
-        if (command === 'all') {
-            figma.currentPage.selection = selection;
-            if (msg.textMode) {
-                figma.currentPage.selection = selectText(selection);
+            if (command === 'all') {
+                figma.currentPage.selection = selection;
+                if (msg.textMode) {
+                    figma.currentPage.selection = selectText(selection);
+                }
             }
-        }
-        if (command === 'sideHeader') {
-            const count = getColCount(frame);
-            const wrapped = count > 0 ? ((msg.direction % count) + count) % count : 0;
-            const nodes = colSelect(frame, wrapped);
-            figma.currentPage.selection = nodes;
-            if (msg.textMode) {
-                figma.currentPage.selection = selectText(nodes);
+            if (command === 'sideHeader') {
+                const count = getColCount(frame);
+                const wrapped = count > 0 ? ((msg.direction % count) + count) % count : 0;
+                const nodes = colSelect(frame, wrapped);
+                figma.currentPage.selection = nodes;
+                if (msg.textMode) {
+                    figma.currentPage.selection = selectText(nodes);
+                }
+                figma.ui.postMessage({type: 'direction-wrapped', direction: wrapped});
             }
-            figma.ui.postMessage({type: 'direction-wrapped', direction: wrapped});
-        }
-        if (command === 'topHeader') {
-            const count = getRowCount(frame);
-            const wrapped = count > 0 ? ((msg.direction % count) + count) % count : 0;
-            const nodes = rowSelect(frame, wrapped);
-            figma.currentPage.selection = nodes;
-            if (msg.textMode) {
-                figma.currentPage.selection = selectText(nodes);
+            if (command === 'topHeader') {
+                const count = getRowCount(frame);
+                const wrapped = count > 0 ? ((msg.direction % count) + count) % count : 0;
+                const nodes = rowSelect(frame, wrapped);
+                figma.currentPage.selection = nodes;
+                if (msg.textMode) {
+                    figma.currentPage.selection = selectText(nodes);
+                }
+                figma.ui.postMessage({type: 'direction-wrapped', direction: wrapped});
             }
-            figma.ui.postMessage({type: 'direction-wrapped', direction: wrapped});
-        }
-        if (command === 'oddRows') {
-            const nodes = strideRowSelect(frame, 0);
-            figma.currentPage.selection = nodes;
-            if (msg.textMode) {
-                figma.currentPage.selection = selectText(nodes);
+            if (command === 'oddRows') {
+                const nodes = strideRowSelect(frame, 0);
+                figma.currentPage.selection = nodes;
+                if (msg.textMode) {
+                    figma.currentPage.selection = selectText(nodes);
+                }
             }
-        }
-        if (command === 'evenRows') {
-            const nodes = strideRowSelect(frame, 1);
-            figma.currentPage.selection = nodes;
-            if (msg.textMode) {
-                figma.currentPage.selection = selectText(nodes);
+            if (command === 'evenRows') {
+                const nodes = strideRowSelect(frame, 1);
+                figma.currentPage.selection = nodes;
+                if (msg.textMode) {
+                    figma.currentPage.selection = selectText(nodes);
+                }
             }
-        }
-        if (command === 'oddCols') {
-            const nodes = strideColSelect(frame, 0);
-            figma.currentPage.selection = nodes;
-            if (msg.textMode) {
-                figma.currentPage.selection = selectText(nodes);
+            if (command === 'oddCols') {
+                const nodes = strideColSelect(frame, 0);
+                figma.currentPage.selection = nodes;
+                if (msg.textMode) {
+                    figma.currentPage.selection = selectText(nodes);
+                }
             }
-        }
-        if (command === 'evenCols') {
-            const nodes = strideColSelect(frame, 1);
-            figma.currentPage.selection = nodes;
-            if (msg.textMode) {
-                figma.currentPage.selection = selectText(nodes);
+            if (command === 'evenCols') {
+                const nodes = strideColSelect(frame, 1);
+                figma.currentPage.selection = nodes;
+                if (msg.textMode) {
+                    figma.currentPage.selection = selectText(nodes);
+                }
             }
-        }
+        })();
     }
 
     if (msg.type === 'create-table') {
-        // If items is empty (pick-existing toggle), extract data from the existing frame
-        if (!msg.items || msg.items.length === 0) {
+        (async () => {
+            // If items is empty (pick-existing toggle), extract data from the existing frame
+            if (!msg.items || msg.items.length === 0) {
+                if (msg.targetFrameId) {
+                    const existingNode = await figma.getNodeByIdAsync(msg.targetFrameId);
+                    if (existingNode && existingNode.type === 'FRAME') {
+                        const existingFrame = existingNode as FrameNode;
+                        const currentLayout = getLayoutState(existingFrame);
+                        const rawData = extractFrameData(existingFrame);
+                        const needsTranspose = currentLayout !== msg.state;
+                        input = needsTranspose ? transposeData(rawData) : rawData;
+                    }
+                }
+            } else {
+                input = msg.items;
+            }
+
+            id = randomId();
+            message = msg;
+            const arr = [];
+
+            // Remove existing frame first, remember its position for in-place replace
+            let replaceX: number | null = null;
+            let replaceY: number | null = null;
             if (msg.targetFrameId) {
-                const existingNode = await figma.getNodeByIdAsync(msg.targetFrameId);
-                if (existingNode && existingNode.type === 'FRAME') {
-                    const existingFrame = existingNode as FrameNode;
-                    const currentLayout = getLayoutState(existingFrame);
-                    const rawData = extractFrameData(existingFrame);
-                    const needsTranspose = currentLayout !== msg.state;
-                    input = needsTranspose ? transposeData(rawData) : rawData;
+                const existing = await figma.getNodeByIdAsync(msg.targetFrameId);
+                if (existing && existing.type === 'FRAME') {
+                    replaceX = (existing as FrameNode).x;
+                    replaceY = (existing as FrameNode).y;
+                    existing.remove();
                 }
             }
-        } else {
-            input = msg.items;
-        }
 
-        id = randomId();
-        message = msg;
-        const arr = [];
-
-        // Remove existing frame first, remember its position for in-place replace
-        let replaceX: number | null = null;
-        let replaceY: number | null = null;
-        if (msg.targetFrameId) {
-            const existing = await figma.getNodeByIdAsync(msg.targetFrameId);
-            if (existing && existing.type === 'FRAME') {
-                replaceX = (existing as FrameNode).x;
-                replaceY = (existing as FrameNode).y;
-                existing.remove();
-            }
-        }
-
-        if (message.state === 'tableByRow') {
-            (async () => {
+            if (message.state === 'tableByRow') {
                 const mainFrame = await autoByRow(() => removeTempValueOnEmptyTextCell(), input);
                 if (replaceX !== null) {
                     mainFrame.x = replaceX;
@@ -149,22 +152,22 @@ figma.ui.onmessage = async (msg) => {
                     newFrameId: mainFrame.id,
                     newFrameName: mainFrame.name,
                 });
-            })();
-        } else {
-            const mainFrame = autoByCol(() => removeTempValueOnEmptyTextCell(), input, arr);
-            if (replaceX !== null) {
-                mainFrame.x = replaceX;
-                mainFrame.y = replaceY;
+            } else {
+                const mainFrame = autoByCol(() => removeTempValueOnEmptyTextCell(), input, arr);
+                if (replaceX !== null) {
+                    mainFrame.x = replaceX;
+                    mainFrame.y = replaceY;
+                }
+                figma.currentPage.selection = [mainFrame];
+                figma.viewport.scrollAndZoomIntoView([mainFrame]);
+                figma.ui.postMessage({
+                    type: 'create-table',
+                    message: arr,
+                    newFrameId: mainFrame.id,
+                    newFrameName: mainFrame.name,
+                });
             }
-            figma.currentPage.selection = [mainFrame];
-            figma.viewport.scrollAndZoomIntoView([mainFrame]);
-            figma.ui.postMessage({
-                type: 'create-table',
-                message: arr,
-                newFrameId: mainFrame.id,
-                newFrameName: mainFrame.name,
-            });
-        }
+        })();
     }
 };
 
